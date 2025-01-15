@@ -11,6 +11,11 @@
       defer
       src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
     ></script>
+    <!-- FontAwesome CDN -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
   </head>
   <body class="bg-gray-100 p-8" x-data="dashboard">
     <div class="max-w-4xl mx-auto">
@@ -19,11 +24,272 @@
       <!-- Environment Status -->
       <div id="env-status" class="mb-6">
         <template x-if="envStatus.success">
-          <p class="text-green-600 font-bold" x-text="envStatus.message"></p>
+          <div
+            class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded flex justify-between items-center"
+          >
+            <p class="font-bold" x-text="envStatus.message"></p>
+            <button
+              @click="openSettingsModal"
+              class="text-green-700 hover:text-green-800"
+            >
+              <i class="fas fa-cog"></i> Settings
+            </button>
+          </div>
         </template>
         <template x-if="!envStatus.success">
-          <p class="text-red-600 font-bold" x-text="envStatus.message"></p>
+          <div
+            class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded"
+          >
+            <p class="font-bold" x-text="envStatus.message"></p>
+            <template x-if="envStatus.missing">
+              <p class="mt-2">
+                Missing variables:
+                <span x-text="envStatus.missing.join(', ')"></span>
+              </p>
+            </template>
+          </div>
         </template>
+      </div>
+
+      <!-- Settings Modal -->
+      <div
+        x-show="isSettingsModalOpen"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+        x-cloak
+      >
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6">
+          <h2 class="text-xl font-semibold mb-4">Settings</h2>
+
+          <!-- Tabs -->
+          <div class="flex space-x-4 mb-4">
+            <button
+              @click="activeTab = 'aws'"
+              :class="{'bg-blue-500 text-white': activeTab === 'aws', 'bg-gray-200 text-gray-700': activeTab !== 'aws'}"
+              class="px-4 py-2 rounded"
+            >
+              <i class="fas fa-cloud"></i> AWS S3
+            </button>
+            <button
+              @click="activeTab = 'host'"
+              :class="{'bg-blue-500 text-white': activeTab === 'host', 'bg-gray-200 text-gray-700': activeTab !== 'host'}"
+              class="px-4 py-2 rounded"
+            >
+              <i class="fas fa-server"></i> Host
+            </button>
+            <button
+              @click="activeTab = 'database'"
+              :class="{'bg-blue-500 text-white': activeTab === 'database', 'bg-gray-200 text-gray-700': activeTab !== 'database'}"
+              class="px-4 py-2 rounded"
+            >
+              <i class="fas fa-database"></i> Database
+            </button>
+            <button
+              @click="activeTab = 'cron'"
+              :class="{'bg-blue-500 text-white': activeTab === 'cron', 'bg-gray-200 text-gray-700': activeTab !== 'cron'}"
+              class="px-4 py-2 rounded"
+            >
+              <i class="fas fa-clock"></i> Cron
+            </button>
+            <button
+              @click="activeTab = 'policy'"
+              :class="{'bg-blue-500 text-white': activeTab === 'policy', 'bg-gray-200 text-gray-700': activeTab !== 'policy'}"
+              class="px-4 py-2 rounded"
+            >
+              <i class="fas fa-trash"></i> Delete Policy
+            </button>
+          </div>
+
+          <!-- AWS S3 Tab -->
+          <div x-show="activeTab === 'aws'" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-key"></i> AWS Access Key ID</label
+              >
+              <input
+                type="text"
+                x-model="envVars.AWS_ACCESS_KEY_ID"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-lock"></i> AWS Secret Access Key</label
+              >
+              <input
+                type="password"
+                x-model="envVars.AWS_SECRET_ACCESS_KEY"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-globe"></i> AWS Region</label
+              >
+              <input
+                type="text"
+                x-model="envVars.AWS_REGION"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-archive"></i> S3 Bucket Name</label
+              >
+              <input
+                type="text"
+                x-model="envVars.S3_BUCKET_NAME"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Host Tab -->
+          <div x-show="activeTab === 'host'" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-network-wired"></i> SSH Host</label
+              >
+              <input
+                type="text"
+                x-model="envVars.SSH_HOST"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-user"></i> SSH User</label
+              >
+              <input
+                type="text"
+                x-model="envVars.SSH_USER"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-lock"></i> SSH Password</label
+              >
+              <input
+                type="password"
+                x-model="envVars.SSH_PASSWORD"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Database Tab -->
+          <div x-show="activeTab === 'database'" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-server"></i> DB Host</label
+              >
+              <input
+                type="text"
+                x-model="envVars.DB_HOST"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-user"></i> DB User</label
+              >
+              <input
+                type="text"
+                x-model="envVars.DB_USER"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-lock"></i> DB Password</label
+              >
+              <input
+                type="password"
+                x-model="envVars.DB_PASSWORD"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-database"></i> DB Name</label
+              >
+              <input
+                type="text"
+                x-model="envVars.DB_NAME"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Cron Tab -->
+          <div x-show="activeTab === 'cron'" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-clock"></i> Cron Schedule</label
+              >
+              <input
+                type="text"
+                x-model="cronSchedule"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="e.g., 0 0 * * *"
+              />
+            </div>
+            <button
+              @click="saveCron"
+              class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              <i class="fas fa-save"></i> Save Cron
+            </button>
+          </div>
+
+          <!-- Delete Policy Tab -->
+          <div x-show="activeTab === 'policy'" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700"
+                ><i class="fas fa-trash"></i> Delete Backups Older Than
+                (Days)</label
+              >
+              <input
+                type="number"
+                x-model="deletePolicyDays"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              @click="saveDeletePolicy"
+              class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              <i class="fas fa-save"></i> Save Policy
+            </button>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="mt-6 flex justify-end space-x-4">
+            <button
+              @click="isSettingsModalOpen = false"
+              class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            >
+              <i class="fas fa-times"></i> Close
+            </button>
+            <button
+              @click="saveEnv"
+              class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              <i class="fas fa-save"></i> Save Settings
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Backup and Restore Buttons -->
@@ -32,15 +298,19 @@
         <div class="space-x-4">
           <button
             @click="startBackup"
+            :disabled="!envStatus.success"
+            :class="{'opacity-50 cursor-not-allowed': !envStatus.success}"
             class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
           >
-            Start Backup
+            <i class="fas fa-download"></i> Start Backup
           </button>
           <button
             @click="restoreDatabase"
+            :disabled="!envStatus.success"
+            :class="{'opacity-50 cursor-not-allowed': !envStatus.success}"
             class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
           >
-            Restore Database
+            <i class="fas fa-upload"></i> Restore Database
           </button>
         </div>
       </div>
@@ -52,8 +322,8 @@
           <table class="w-full">
             <thead>
               <tr class="bg-gray-200">
-                <th class="px-4 py-2">Key</th>
-                <th class="px-4 py-2">Size</th>
+                <th class="px-4 py-2 text-left">Filename</th>
+                <th class="px-4 py-2 text-right">Size</th>
                 <th class="px-4 py-2">Last Modified</th>
                 <th class="px-4 py-2">Actions</th>
               </tr>
@@ -61,15 +331,24 @@
             <tbody>
               <template x-for="backup in backups" :key="backup.key">
                 <tr class="border-b">
-                  <td class="px-4 py-2" x-text="backup.key"></td>
-                  <td class="px-4 py-2" x-text="backup.size"></td>
-                  <td class="px-4 py-2" x-text="backup.lastModified"></td>
-                  <td class="px-4 py-2">
+                  <td
+                    class="px-4 py-2"
+                    x-text="backup.key.split('/').pop()"
+                  ></td>
+                  <td
+                    class="px-4 py-2 text-right"
+                    x-text="formatFileSize(backup.size)"
+                  ></td>
+                  <td
+                    class="px-4 py-2 text-center"
+                    x-text="formatDate(backup.lastModified)"
+                  ></td>
+                  <td class="px-4 py-2 text-center">
                     <button
                       @click="deleteBackup(backup.key)"
                       class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
                     >
-                      Delete
+                      <i class="fas fa-trash"></i> Delete
                     </button>
                   </td>
                 </tr>
@@ -87,82 +366,254 @@
       document.addEventListener("alpine:init", () => {
         Alpine.data("dashboard", () => ({
           envStatus: { success: false, message: "Loading..." },
+          currentConfig: null,
           backups: [],
+          envVars: {
+            AWS_ACCESS_KEY_ID: "",
+            AWS_SECRET_ACCESS_KEY: "",
+            AWS_REGION: "",
+            S3_BUCKET_NAME: "",
+            DB_HOST: "",
+            DB_USER: "",
+            DB_PASSWORD: "",
+            DB_NAME: "",
+            SSH_HOST: "",
+            SSH_USER: "",
+            SSH_PASSWORD: "",
+          },
+          cronSchedule: "",
+          deletePolicyDays: 30,
+          isSettingsModalOpen: false,
+          activeTab: "aws",
 
           init() {
             this.checkEnvVars();
             this.fetchBackups();
+            this.fetchCron();
+            this.fetchDeletePolicy();
           },
 
-          // Check environment variables
+          openSettingsModal() {
+            this.isSettingsModalOpen = true;
+          },
+
           async checkEnvVars() {
             try {
               const response = await fetch("/env-check");
               const data = await response.json();
-              this.envStatus = data;
+              this.envStatus = {
+                success: data.success,
+                message: data.message,
+                missing: data.missing || [],
+              };
+
+              if (data.success && data.currentEnvVars) {
+                Object.keys(data.currentEnvVars).forEach((key) => {
+                  if (key in this.envVars) {
+                    this.envVars[key] = data.currentEnvVars[key];
+                  }
+                });
+              }
             } catch (error) {
+              console.error("Failed to check environment variables:", error);
               this.envStatus = {
                 success: false,
                 message: "Failed to check environment variables",
+                missing: [],
               };
             }
           },
 
-          // Fetch list of backups
-          async fetchBackups() {
+          async fetchCron() {
             try {
-              const response = await fetch("/backups");
+              const response = await fetch("/cron");
               const data = await response.json();
-              this.backups = data.map((backup) => ({
-                ...backup,
-                lastModified: new Date(backup.lastModified).toLocaleString(),
-              }));
+              this.cronSchedule = data.schedule || "";
             } catch (error) {
-              console.error("Failed to fetch backups:", error);
+              console.error("Failed to fetch cron schedule:", error);
             }
           },
 
-          // Start backup
-          async startBackup() {
+          async fetchDeletePolicy() {
             try {
-              const response = await fetch("/backup", { method: "POST" });
+              const response = await fetch("/delete-policy");
               const data = await response.json();
-              alert(data.message);
-              this.fetchBackups(); // Refresh the backups list
+              this.deletePolicyDays = data.days || 30;
+            } catch (error) {
+              console.error("Failed to fetch delete policy:", error);
+            }
+          },
+
+          async saveCron() {
+            try {
+              const response = await fetch("/cron", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ schedule: this.cronSchedule }),
+              });
+              const data = await response.json();
+              if (response.ok) {
+                alert("Cron schedule saved successfully");
+              } else {
+                throw new Error(data.error || "Failed to save cron schedule");
+              }
+            } catch (error) {
+              alert("Failed to save cron schedule: " + error.message);
+            }
+          },
+
+          async saveDeletePolicy() {
+            try {
+              const response = await fetch("/delete-policy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ days: this.deletePolicyDays }),
+              });
+              const data = await response.json();
+              if (response.ok) {
+                alert("Delete policy saved successfully");
+              } else {
+                throw new Error(data.error || "Failed to save delete policy");
+              }
+            } catch (error) {
+              alert("Failed to save delete policy: " + error.message);
+            }
+          },
+
+          formatFileSize(bytes) {
+            if (bytes === 0) return "0 Bytes";
+            const k = 1024;
+            const sizes = ["Bytes", "KB", "MB", "GB"];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (
+              parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+            );
+          },
+
+          formatDate(date) {
+            return new Date(date).toLocaleString();
+          },
+
+          async saveEnv() {
+            try {
+              const response = await fetch("/save-env", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(this.envVars),
+              });
+
+              const data = await response.json();
+
+              if (data.success) {
+                alert("Settings saved successfully");
+                this.isSettingsModalOpen = false;
+                await this.checkEnvVars();
+              } else {
+                throw new Error(data.message || "Failed to save settings");
+              }
+            } catch (error) {
+              alert("Failed to save settings: " + error.message);
+            }
+          },
+
+          async fetchBackups() {
+            try {
+              const response = await fetch("/backups");
+              if (!response.ok) throw new Error("Failed to fetch backups");
+              const data = await response.json();
+              this.backups = data;
+            } catch (error) {
+              console.error("Failed to fetch backups:", error);
+              this.backups = [];
+            }
+          },
+
+          async startBackup() {
+            if (!this.envStatus.success) {
+              alert(
+                "Please configure all required environment variables first"
+              );
+              return;
+            }
+
+            try {
+              const response = await fetch("/backup", {
+                method: "POST",
+              });
+              const data = await response.json();
+
+              if (response.ok) {
+                alert("Backup started successfully");
+                await this.fetchBackups();
+              } else {
+                throw new Error(data.error || "Backup failed");
+              }
             } catch (error) {
               alert("Backup failed: " + error.message);
             }
           },
 
-          // Restore database
           async restoreDatabase() {
-            const backupKey = prompt("Enter the backup key to restore:");
-            if (backupKey) {
-              try {
-                const response = await fetch(`/restore/${backupKey}`, {
+            if (!this.envStatus.success) {
+              alert(
+                "Please configure all required environment variables first"
+              );
+              return;
+            }
+
+            const backup = this.backups[0];
+            if (!backup) {
+              alert("No backups available to restore");
+              return;
+            }
+
+            const backupKey = prompt(
+              "Enter the backup key to restore:",
+              backup.key
+            );
+            if (!backupKey) return;
+
+            try {
+              const response = await fetch(
+                `/restore/${encodeURIComponent(backupKey)}`,
+                {
                   method: "POST",
-                });
-                const data = await response.json();
-                alert(data.message);
-              } catch (error) {
-                alert("Restore failed: " + error.message);
+                }
+              );
+              const data = await response.json();
+
+              if (response.ok) {
+                alert("Database restored successfully");
+              } else {
+                throw new Error(data.error || "Restore failed");
               }
+            } catch (error) {
+              alert("Restore failed: " + error.message);
             }
           },
 
-          // Delete backup
           async deleteBackup(key) {
-            if (confirm("Are you sure you want to delete this backup?")) {
-              try {
-                const response = await fetch(`/backups/${key}`, {
+            if (!confirm("Are you sure you want to delete this backup?")) {
+              return;
+            }
+
+            try {
+              const response = await fetch(
+                `/backups/${encodeURIComponent(key)}`,
+                {
                   method: "DELETE",
-                });
-                const data = await response.json();
-                alert(data.message);
-                this.fetchBackups(); // Refresh the backups list
-              } catch (error) {
-                alert("Failed to delete backup: " + error.message);
+                }
+              );
+              const data = await response.json();
+
+              if (response.ok) {
+                alert("Backup deleted successfully");
+                await this.fetchBackups();
+              } else {
+                throw new Error(data.error || "Delete failed");
               }
+            } catch (error) {
+              alert("Failed to delete backup: " + error.message);
             }
           },
         }));

@@ -1,6 +1,4 @@
-// Load environment variables from .env file
 require("dotenv").config();
-
 const express = require("express");
 const {
   S3Client,
@@ -11,9 +9,9 @@ const {
 } = require("@aws-sdk/client-s3");
 const morgan = require("morgan");
 const { Client } = require("ssh2");
-const fs = require("fs");
 const cron = require("node-cron");
 const { PassThrough } = require("stream");
+const fs = require("fs");
 const path = require("path");
 const app = express();
 const port = 3000;
@@ -43,18 +41,89 @@ app.use(morgan("combined")); // Logging
 // Serve static files (index.html)
 app.use(express.static(path.join(__dirname, "public")));
 
-// Endpoint to check environment variables
+// Retention policy configuration
+let retentionDays = 30; // Default retention period in days
+
+// Function to read .env file
+function readEnvFile() {
+  try {
+    const envPath = path.join(__dirname, ".env");
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, "utf8");
+      const envVars = {};
+      envContent.split("\n").forEach((line) => {
+        const [key, value] = line.split("=");
+        if (key && value) {
+          envVars[key.trim()] = value.trim();
+        }
+      });
+      return envVars;
+    }
+    return {};
+  } catch (error) {
+    console.error("Error reading .env file:", error);
+    return {};
+  }
+}
+
+// Updated env-check endpoint
 app.get("/env-check", (req, res) => {
-  if (missingEnvVars.length > 0) {
+  const currentEnvVars = readEnvFile();
+  const missing = requiredEnvVars.filter((envVar) => !currentEnvVars[envVar]);
+
+  if (missing.length > 0) {
     res.status(400).json({
       success: false,
       message: "Missing required environment variables",
-      missing: missingEnvVars,
+      missing,
+      currentEnvVars: {}, // Don't send sensitive data if not properly configured
     });
   } else {
-    res
-      .status(200)
-      .json({ success: true, message: "All environment variables are set" });
+    res.status(200).json({
+      success: true,
+      message: "All environment variables are set",
+      currentEnvVars: currentEnvVars, // This includes sensitive data
+    });
+  }
+});
+
+// Updated save-env endpoint
+app.post("/save-env", (req, res) => {
+  const envVars = req.body;
+
+  // Validate required fields
+  const missingFields = requiredEnvVars.filter((field) => !envVars[field]);
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing required fields",
+      missing: missingFields,
+    });
+  }
+
+  // Create the .env file content
+  const envContent = Object.entries(envVars)
+    .map(([key, value]) => `${key}=${value}`)
+    .join("\n");
+
+  try {
+    // Write to the .env file
+    fs.writeFileSync(path.join(__dirname, ".env"), envContent);
+
+    // Reload environment variables
+    require("dotenv").config();
+
+    res.status(200).json({
+      success: true,
+      message: "Environment variables saved successfully",
+    });
+  } catch (error) {
+    console.error("Error saving .env file:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save environment variables",
+    });
   }
 });
 
@@ -70,12 +139,13 @@ if (missingEnvVars.length === 0) {
   });
 }
 
-// Backup endpoint with SSH2 (only if all environment variables are set)
-app.post("/backup", async (req, res) => {
+// Backup function (extracted from the /backup endpoint)
+const performBackup = async () => {
   if (missingEnvVars.length > 0) {
-    return res
-      .status(400)
-      .json({ error: "Missing required environment variables" });
+    console.error(
+      "Cannot perform backup: Missing required environment variables"
+    );
+    return;
   }
 
   let backupFilePath = `./backup_${Date.now()}.sql.gz`;
@@ -94,7 +164,6 @@ app.post("/backup", async (req, res) => {
         (err, stream) => {
           if (err) {
             console.error("Failed to execute mysqldump:", err);
-            res.status(500).json({ error: "Failed to execute mysqldump" });
             conn.end();
             return;
           }
@@ -120,20 +189,14 @@ app.post("/backup", async (req, res) => {
               .send(new PutObjectCommand(uploadParams))
               .then((data) => {
                 console.log("Backup uploaded to S3:", data.Key);
-                res.status(200).json({
-                  message: "Backup successful",
-                  key: uploadParams.Key,
-                });
               })
               .catch((err) => {
                 console.error("S3 upload error:", err);
-                res.status(500).json({ error: "S3 upload failed" });
               });
           });
 
           stream.on("error", (err) => {
             console.error("Stream error:", err);
-            res.status(500).json({ error: "Stream error during backup" });
             conn.end();
           });
         }
@@ -142,7 +205,6 @@ app.post("/backup", async (req, res) => {
 
     conn.on("error", (err) => {
       console.error("SSH connection error:", err);
-      res.status(500).json({ error: "SSH connection failed" });
     });
 
     conn.connect({
@@ -153,7 +215,6 @@ app.post("/backup", async (req, res) => {
     });
   } catch (error) {
     console.error("Backup error:", error);
-    res.status(500).json({ error: "Backup failed" });
   } finally {
     // Ensure the file is deleted after upload or on error
     fileStream.close(() => {
@@ -162,6 +223,23 @@ app.post("/backup", async (req, res) => {
         else console.log("Backup file deleted:", backupFilePath);
       });
     });
+  }
+};
+
+// Backup endpoint with SSH2 (only if all environment variables are set)
+app.post("/backup", async (req, res) => {
+  if (missingEnvVars.length > 0) {
+    return res
+      .status(400)
+      .json({ error: "Missing required environment variables" });
+  }
+
+  try {
+    await performBackup();
+    res.status(200).json({ message: "Backup successful" });
+  } catch (error) {
+    console.error("Backup error:", error);
+    res.status(500).json({ error: "Backup failed" });
   }
 });
 
@@ -276,7 +354,7 @@ app.delete("/backups/:key", async (req, res) => {
   }
 });
 
-// Retention policy: Delete backups older than 30 days (only if all environment variables are set)
+// Retention policy: Delete backups older than retentionDays (configurable)
 const deleteOldBackups = async () => {
   if (missingEnvVars.length > 0) {
     console.error(
@@ -296,10 +374,10 @@ const deleteOldBackups = async () => {
     );
 
     const now = Date.now();
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+    const retentionTime = now - retentionDays * 24 * 60 * 60 * 1000; // retentionDays in milliseconds
 
     for (const item of data.Contents) {
-      if (item.LastModified < new Date(thirtyDaysAgo)) {
+      if (item.LastModified < new Date(retentionTime)) {
         const deleteObjectParams = {
           Bucket: process.env.S3_BUCKET_NAME,
           Key: item.Key,
@@ -307,6 +385,8 @@ const deleteOldBackups = async () => {
 
         await s3Client.send(new DeleteObjectCommand(deleteObjectParams));
         console.log(`Deleted old backup: ${item.Key}`);
+      } else {
+        console.log(`Backup is within retention period: ${item.Key}`);
       }
     }
   } catch (error) {
@@ -316,7 +396,15 @@ const deleteOldBackups = async () => {
 
 // Schedule retention policy cleanup daily at 3 AM (only if all environment variables are set)
 if (missingEnvVars.length === 0) {
-  cron.schedule("0 3 * * *", deleteOldBackups);
+  cron.schedule("0 3 * * *", async () => {
+    try {
+      console.log("Running retention policy cleanup...");
+      await deleteOldBackups();
+      console.log("Retention policy cleanup completed.");
+    } catch (error) {
+      console.error("Retention policy cleanup failed:", error);
+    }
+  });
 }
 
 // Schedule automated backups daily at 2 AM (only if all environment variables are set)
@@ -324,13 +412,10 @@ if (missingEnvVars.length === 0) {
   cron.schedule("0 2 * * *", async () => {
     try {
       console.log("Running scheduled backup...");
-      const response = await axios.post("http://localhost:3000/backup");
-      console.log("Scheduled backup successful:", response.data);
+      await performBackup(); // Directly call the backup function
+      console.log("Scheduled backup completed.");
     } catch (error) {
-      console.error(
-        "Scheduled backup failed:",
-        error.response ? error.response.data : error.message
-      );
+      console.error("Scheduled backup failed:", error);
     }
   });
 }
