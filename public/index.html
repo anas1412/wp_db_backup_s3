@@ -451,12 +451,17 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ schedule: this.cronSchedule }),
               });
-              const data = await response.json();
-              if (response.ok) {
-                alert("Cron schedule saved successfully");
-              } else {
-                throw new Error(data.error || "Failed to save cron schedule");
+
+              if (!response.ok) {
+                // Try to parse the error response as JSON
+                const errorData = await response.json().catch(() => ({
+                  message: "Failed to save cron schedule",
+                }));
+                throw new Error(errorData.message);
               }
+
+              const data = await response.json();
+              alert(data.message || "Cron schedule saved successfully");
             } catch (error) {
               alert("Failed to save cron schedule: " + error.message);
             }
@@ -469,12 +474,19 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ days: this.deletePolicyDays }),
               });
-              const data = await response.json();
-              if (response.ok) {
-                alert("Delete policy saved successfully");
-              } else {
-                throw new Error(data.error || "Failed to save delete policy");
+
+              // Check if the response is OK (status code 200-299)
+              if (!response.ok) {
+                // Try to parse the error response as JSON
+                const errorData = await response.json().catch(() => ({
+                  message: "Failed to save delete policy",
+                }));
+                throw new Error(errorData.message);
               }
+
+              // Parse the success response
+              const data = await response.json();
+              alert(data.message || "Delete policy saved successfully");
             } catch (error) {
               alert("Failed to save delete policy: " + error.message);
             }

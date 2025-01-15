@@ -29,6 +29,8 @@ const requiredEnvVars = [
   "SSH_HOST",
   "SSH_USER",
   "SSH_PASSWORD",
+  "RETENTION_DAYS",
+  "CRON_SCHEDULE",
 ];
 
 // Check for missing environment variables
@@ -42,7 +44,8 @@ app.use(morgan("combined")); // Logging
 app.use(express.static(path.join(__dirname, "public")));
 
 // Retention policy configuration
-let retentionDays = 30; // Default retention period in days
+let retentionDays = parseInt(process.env.RETENTION_DAYS) || 30; // Default retention period in days
+let cronSchedule = process.env.CRON_SCHEDULE || "0 2 * * *"; // Default schedule: 2 AM daily
 
 // Function to read .env file
 function readEnvFile() {
@@ -407,18 +410,134 @@ if (missingEnvVars.length === 0) {
   });
 }
 
-// Schedule automated backups daily at 2 AM (only if all environment variables are set)
-if (missingEnvVars.length === 0) {
-  cron.schedule("0 2 * * *", async () => {
-    try {
-      console.log("Running scheduled backup...");
-      await performBackup(); // Directly call the backup function
-      console.log("Scheduled backup completed.");
-    } catch (error) {
-      console.error("Scheduled backup failed:", error);
+// Endpoint to save the retention policy
+app.post("/delete-policy", async (req, res) => {
+  try {
+    const { days } = req.body;
+
+    // Validate the input
+    if (isNaN(days) || days < 1) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid retention days. Please provide a number greater than 0.",
+      });
     }
-  });
+
+    // Update the retentionDays variable
+    retentionDays = days;
+
+    // Update the .env file
+    const envPath = path.join(__dirname, ".env");
+    let envContent = fs.existsSync(envPath)
+      ? fs.readFileSync(envPath, "utf8")
+      : "";
+    const envVars = envContent.split("\n").filter((line) => line.trim() !== "");
+    const retentionIndex = envVars.findIndex((line) =>
+      line.startsWith("RETENTION_DAYS=")
+    );
+
+    if (retentionIndex !== -1) {
+      envVars[retentionIndex] = `RETENTION_DAYS=${days}`;
+    } else {
+      envVars.push(`RETENTION_DAYS=${days}`);
+    }
+
+    fs.writeFileSync(envPath, envVars.join("\n"));
+
+    // Return success response
+    res.status(200).json({
+      success: true,
+      message: "Retention policy saved successfully",
+    });
+  } catch (error) {
+    console.error("Error saving retention policy:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save retention policy",
+    });
+  }
+});
+
+// Function to reschedule the cron job
+const rescheduleCronJob = (newSchedule) => {
+  if (cron.validate(newSchedule)) {
+    // Stop the existing cron job (if any)
+    cron.getTasks().forEach((task) => task.stop());
+
+    // Schedule the backup task with the new schedule
+    cron.schedule(newSchedule, async () => {
+      try {
+        console.log("Running scheduled backup...");
+        await performBackup(); // Call the backup function
+        console.log("Scheduled backup completed.");
+      } catch (error) {
+        console.error("Scheduled backup failed:", error);
+      }
+    });
+
+    console.log("Cron job rescheduled with new schedule:", newSchedule);
+  } else {
+    console.error("Invalid cron schedule:", newSchedule);
+  }
+};
+
+// Initial cron job setup
+if (missingEnvVars.length === 0) {
+  rescheduleCronJob(cronSchedule);
 }
+
+// Endpoint to save the cron schedule
+app.post("/cron", async (req, res) => {
+  try {
+    const { schedule } = req.body;
+
+    // Validate the cron schedule
+    if (!cron.validate(schedule)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid cron schedule. Please provide a valid cron expression.",
+      });
+    }
+
+    // Update the cron schedule
+    cronSchedule = schedule;
+
+    // Update the .env file
+    const envPath = path.join(__dirname, ".env");
+    let envContent = fs.existsSync(envPath)
+      ? fs.readFileSync(envPath, "utf8")
+      : "";
+    const envVars = envContent.split("\n").filter((line) => line.trim() !== "");
+    const cronIndex = envVars.findIndex((line) =>
+      line.startsWith("CRON_SCHEDULE=")
+    );
+
+    if (cronIndex !== -1) {
+      envVars[cronIndex] = `CRON_SCHEDULE=${schedule}`;
+    } else {
+      envVars.push(`CRON_SCHEDULE=${schedule}`);
+    }
+
+    fs.writeFileSync(envPath, envVars.join("\n"));
+
+    // Reschedule the cron job with the new schedule
+    rescheduleCronJob(schedule);
+
+    // Return success response
+    res.status(200).json({
+      success: true,
+      message: "Cron schedule saved and updated successfully",
+    });
+  } catch (error) {
+    console.error("Error saving cron schedule:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save cron schedule",
+    });
+  }
+});
 
 // Start the server
 app.listen(port, () => {
